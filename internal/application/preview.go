@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"oralarchive/internal/domain"
 	"oralarchive/internal/storage"
@@ -13,13 +14,19 @@ func (s *Service) Preview(ctx context.Context, caseID string) (domain.Preview, e
 	if err != nil {
 		return domain.Preview{}, mapStorage(err)
 	}
-	consent, _ := s.store.GetConsent(ctx, caseID)
+	consent, err := s.store.GetConsent(ctx, caseID)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return domain.Preview{}, err
+	}
 	segments, err := s.store.ListSegments(ctx, caseID)
 	if err != nil {
 		return domain.Preview{}, err
 	}
 	p := domain.BuildPreview(c, consent, segments)
-	confirmation, _ := s.store.LatestConfirmation(ctx, caseID)
+	confirmation, err := s.store.LatestConfirmation(ctx, caseID)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return domain.Preview{}, err
+	}
 	p.Issues = domain.CheckGates(c, consent, segments, confirmation, s.now())
 	return p, nil
 }
