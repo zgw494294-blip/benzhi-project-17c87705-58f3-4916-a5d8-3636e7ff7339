@@ -35,7 +35,7 @@ func (s *Store) GetPackageByCase(ctx context.Context, caseID string) (*domain.Re
 	return &p, err
 }
 func (s *Store) VerifyReferences(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT digest FROM media_objects`)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT digest FROM media_objects`)
 	if err != nil {
 		return err
 	}

@@ -36,8 +36,20 @@ func (s *Store) PutMedia(ctx context.Context, caseID, contentType string, r io.R
 		return MediaObject{}, err
 	}
 	obj := MediaObject{digest, caseID, contentType, int64(len(b)), time.Now().UTC()}
-	_, err = s.db.ExecContext(ctx, `INSERT OR REPLACE INTO media_objects(digest,case_id,content_type,size,stored_at) VALUES(?,?,?,?,?)`, obj.Digest, obj.CaseID, obj.ContentType, obj.Size, obj.StoredAt.Format(time.RFC3339Nano))
-	return obj, err
+	// Identical audio bytes are shared across cases: the underlying object file
+	// is written once, while each case keeps its own media_objects reference via
+	// the composite primary key (digest, case_id). INSERT OR IGNORE preserves an
+	// existing reference for this case instead of replacing another case's row.
+	if _, err = s.db.ExecContext(ctx, `INSERT OR IGNORE INTO media_objects(digest,case_id,content_type,size,stored_at) VALUES(?,?,?,?,?)`, obj.Digest, obj.CaseID, obj.ContentType, obj.Size, obj.StoredAt.Format(time.RFC3339Nano)); err != nil {
+		return obj, err
+	}
+	// Re-read the canonical row so callers always see the stored reference for
+	// this case (which may predate this upload) rather than a transient copy.
+	var storedAt string
+	if qerr := s.db.QueryRowContext(ctx, `SELECT content_type,size,stored_at FROM media_objects WHERE digest=? AND case_id=?`, obj.Digest, obj.CaseID).Scan(&obj.ContentType, &obj.Size, &storedAt); qerr == nil {
+		obj.StoredAt, _ = time.Parse(time.RFC3339Nano, storedAt)
+	}
+	return obj, nil
 }
 func (s *Store) HasMedia(ctx context.Context, digest, caseID string) (bool, error) {
 	var one int
