@@ -36,6 +36,9 @@ func (s *Store) PutMedia(ctx context.Context, caseID, contentType string, r io.R
 		return MediaObject{}, err
 	}
 	obj := MediaObject{digest, caseID, contentType, int64(len(b)), time.Now().UTC()}
+	if err = ctx.Err(); err != nil {
+		return obj, err
+	}
 	_, err = s.db.ExecContext(ctx, `INSERT OR IGNORE INTO media_objects(digest,case_id,content_type,size,stored_at) VALUES(?,?,?,?,?)`, obj.Digest, obj.CaseID, obj.ContentType, obj.Size, obj.StoredAt.Format(time.RFC3339Nano))
 	return obj, err
 }
