@@ -25,6 +25,9 @@ func (s *Service) ReviewSegment(ctx context.Context, caseID, segmentID string, c
 	if err = seg.Decide(cmd.DecisionStatus, cmd.RedactionText, cmd.Reason, cmd.ReviewedBy); err != nil {
 		return seg, err
 	}
+	if err = s.store.UpdateSegmentDecision(ctx, seg); err != nil {
+		return seg, mapStorage(err)
+	}
 	err = s.store.WithTx(ctx, func(tx *storage.Tx) error {
 		c, err := tx.GetCase(ctx, caseID)
 		if err != nil {
@@ -38,9 +41,6 @@ func (s *Service) ReviewSegment(ctx context.Context, caseID, segmentID string, c
 		}
 		expected := c.Version
 		bump(&c, s.now())
-		if err = tx.UpdateSegmentDecision(ctx, seg); err != nil {
-			return err
-		}
 		if err = tx.UpdateCase(ctx, c, expected); err != nil {
 			return err
 		}
