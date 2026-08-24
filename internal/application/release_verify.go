@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -28,6 +29,12 @@ func (s *Service) VerifyReleasePackage(ctx context.Context, caseID string) (doma
 	pkg, err := s.store.GetPackageByCase(ctx, caseID)
 	if err != nil {
 		return domain.ReleaseVerification{}, mapStorage(err)
+	}
+	if cached, ok := s.cachedSuccessfulVerification(pkg.PackageID); ok {
+		var report domain.ReleaseVerification
+		if err = json.Unmarshal(cached, &report); err == nil {
+			return report, nil
+		}
 	}
 	report := domain.ReleaseVerification{CheckedAt: s.now().UTC(), Package: pkg, ManifestDigest: pkg.ManifestDigest}
 	data, manifest, readErr := s.store.ReadManifestData(ctx, *pkg)
@@ -118,6 +125,13 @@ func (s *Service) VerifyReleasePackage(ctx context.Context, caseID string) (doma
 		}
 	}
 	report.Valid = len(report.Failures) == 0
+	if report.Valid {
+		cached, marshalErr := json.Marshal(report)
+		if marshalErr != nil {
+			return domain.ReleaseVerification{}, marshalErr
+		}
+		s.cacheSuccessfulVerification(pkg.PackageID, cached)
+	}
 	return report, nil
 }
 
