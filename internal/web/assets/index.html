@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#18221d">
+  <title>口述史发布治理台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark">口述史</span><strong>发布治理台</strong></div>
+    <div class="system-state"><span class="pulse"></span><span id="serviceState">本地档案库</span></div>
+  </header>
+  <main class="shell">
+    <aside class="rail">
+      <div class="rail-head"><span>案卷</span><button class="icon-button" id="newCaseButton" title="新建案卷" aria-label="新建案卷">＋</button></div>
+      <div id="caseList" class="case-list" aria-live="polite"></div>
+    </aside>
+    <section class="workspace">
+      <div id="emptyState" class="empty-state">
+        <span class="folio">OH / 01</span>
+        <h1>建立一份<br>受控发布案卷</h1>
+        <button class="primary" id="emptyCreate">新建案卷</button>
+      </div>
+      <div id="caseView" hidden>
+        <header class="case-header">
+          <div><span class="eyebrow" id="caseID"></span><h1 id="caseTitle"></h1><p id="caseMeta"></p></div>
+          <div class="version-block"><span>当前版本</span><strong id="caseVersion">—</strong></div>
+        </header>
+        <nav class="stages" id="stages" aria-label="发布阶段"></nav>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div class="work-grid">
+          <section class="main-column">
+            <section class="panel" id="consentPanel">
+              <div class="section-heading"><span class="section-index">01</span><div><h2>知情同意范围</h2><p>已确认的使用边界</p></div><span class="state-chip" id="consentState">待冻结</span></div>
+              <form id="consentForm" class="form-grid">
+                <label><span>允许受众</span><input name="audiences" value="研究人员,公众" required></label>
+                <label><span>允许用途</span><input name="purposes" value="数字档案,学术研究" required></label>
+                <label><span>封存至</span><input name="embargo" type="date"></label>
+                <label><span>确认人</span><input name="confirmedBy" value="受访者代理人" required></label>
+                <label class="wide"><span>撤回条件</span><textarea name="terms" required>发布前可书面撤回；发布后按档案更正流程处理。</textarea></label>
+                <div class="form-actions wide"><button class="primary" type="submit">冻结同意范围</button></div>
+              </form>
+              <div id="consentSummary" class="digest-box" hidden></div>
+            </section>
+            <section class="panel" id="transcriptPanel">
+              <div class="section-heading"><span class="section-index">02</span><div><h2>音频与转录</h2><p>内容寻址与时间码</p></div><span class="state-chip" id="segmentCount">0 个片段</span></div>
+              <form id="mediaForm" class="inline-form"><label><span>音频文件</span><input name="media" type="file" accept="audio/*" required></label><button class="secondary" type="submit">保存音频</button></form>
+              <div id="mediaDigest" class="media-object">尚未上传音频</div>
+              <form id="segmentForm" class="form-grid compact">
+                <label><span>说话人</span><input name="speaker" value="受访者" required></label>
+                <label><span>敏感标记</span><input name="tags" placeholder="姓名,地点"></label>
+                <label><span>开始（毫秒）</span><input name="start" type="number" min="0" value="0" required></label>
+                <label><span>结束（毫秒）</span><input name="end" type="number" min="1" value="5000" required></label>
+                <label class="wide"><span>转录文本</span><textarea name="transcript" required></textarea></label>
+                <div class="form-actions wide"><button class="primary" type="submit">录入片段</button></div>
+              </form>
+              <form id="batchForm" class="form-grid compact batch-form">
+                <label class="wide"><span>批量片段 JSON</span><textarea name="segments" placeholder='[{"mediaDigest":"sha256:...","speaker":"受访者","startMillis":0,"endMillis":5000,"transcript":"转录文本","sensitivityTags":["地点"]}]'></textarea></label>
+                <div class="form-actions wide"><button class="secondary" type="submit">批量导入片段</button></div>
+              </form>
+              <div id="segments" class="segment-list"></div>
+              <div class="panel-footer"><button id="completeReview" class="secondary">完成脱敏审查</button></div>
+            </section>
+            <section class="panel" id="confirmationPanel">
+              <div class="section-heading"><span class="section-index">03</span><div><h2>受访者确认</h2><p>按最终展示内容核对</p></div><span class="state-chip" id="confirmationState">未确认</span></div>
+              <div id="preview" class="preview-sheet"></div>
+              <form id="confirmationForm" class="confirmation-actions"><label><span>确认意见</span><input name="comment" placeholder="可选"></label><button class="danger" name="decision" value="return" type="submit">退回选中片段</button><button class="primary" name="decision" value="confirm" type="submit">确认预览</button></form>
+            </section>
+            <section class="panel" id="releasePanel">
+              <div class="section-heading"><span class="section-index">04</span><div><h2>发布包</h2><p>不可变清单与校验摘要</p></div><span class="state-chip" id="releaseState">未签发</span></div>
+              <div id="gateList" class="gate-list"></div>
+              <button id="releaseButton" class="primary">签发发布包</button>
+              <button id="verifyReleaseButton" class="secondary">核验已签发包</button>
+              <div id="packageResult" class="package-result" hidden></div>
+              <div id="verificationResult" class="package-result" hidden></div>
+            </section>
+          </section>
+          <aside class="timeline-column"><div class="timeline-title"><span>审计时间线</span><span id="auditCount">0</span></div><ol id="audit" class="timeline"></ol></aside>
+        </div>
+      </div>
+    </section>
+  </main>
+  <dialog id="caseDialog">
+    <form id="caseForm" method="dialog">
+      <div class="dialog-head"><div><span>NEW FOLIO</span><h2>新建采集案卷</h2></div><button class="icon-button" value="cancel" aria-label="关闭">×</button></div>
+      <label><span>访谈主题</span><input name="title" required autofocus></label>
+      <label><span>受访者代称</span><input name="alias" required></label>
+      <label><span>采集员</span><input name="collector" value="采集员甲" required></label>
+      <div class="dialog-actions"><button class="secondary" value="cancel">取消</button><button class="primary" value="create">建立案卷</button></div>
+    </form>
+  </dialog>
+  <script src="/app.js" defer></script>
+</body>
+</html>
