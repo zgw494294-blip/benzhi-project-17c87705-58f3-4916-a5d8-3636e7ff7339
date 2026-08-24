@@ -21,7 +21,32 @@ type CaseDetail struct {
 	Integrity     storage.IntegrityStatus    `json:"integrity"`
 }
 
+func (s *Service) acquireDetail(ctx context.Context, id string) (func(), error) {
+	for {
+		if pending, ok := s.detailInflight[id]; ok {
+			select {
+			case <-pending:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		done := make(chan struct{})
+		s.detailInflight[id] = done
+		return func() {
+			delete(s.detailInflight, id)
+			close(done)
+		}, nil
+	}
+}
+
 func (s *Service) CaseDetail(ctx context.Context, id string) (CaseDetail, error) {
+	release, err := s.acquireDetail(ctx, id)
+	if err != nil {
+		return CaseDetail{}, err
+	}
+	defer release()
+
 	c, err := s.GetCase(ctx, id)
 	if err != nil {
 		return CaseDetail{}, err
