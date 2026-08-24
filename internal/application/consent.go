@@ -16,37 +16,51 @@ func (s *Service) LockConsent(ctx context.Context, caseID string, cmd LockConsen
 		return domain.ConsentScope{}, err
 	}
 	var result domain.ConsentScope
-	err = s.store.WithTx(ctx, func(tx *storage.Tx) error {
-		c, err := tx.GetCase(ctx, caseID)
-		if err != nil {
-			return err
-		}
-		if err = requireVersion(c.Version, cmd.ExpectedVersion); err != nil {
-			return err
-		}
-		if c.Status != domain.StatusDraft {
-			return domain.NewRuleError(domain.CodeInvalidState, "status", "只有草稿案卷可冻结同意范围")
-		}
-		consent, err := domain.NewConsent(newID("consent"), caseID, c.Version, cmd.AllowedAudiences, cmd.AllowedPurposes, cmd.EmbargoUntil, cmd.WithdrawalTerms, cmd.ConfirmedBy, s.now())
-		if err != nil {
-			return err
-		}
-		expected := c.Version
-		if err = c.Transition(domain.StatusConsentLocked, s.now()); err != nil {
-			return err
-		}
-		if err = tx.InsertConsent(ctx, *consent); err != nil {
-			return err
-		}
-		if err = tx.UpdateCase(ctx, c, expected); err != nil {
-			return err
-		}
-		if err = tx.AppendAudit(ctx, domain.AuditEvent{CaseID: caseID, Action: "CONSENT_LOCKED", Actor: p.Name, Detail: fmt.Sprintf("冻结同意版本 %d，摘要 %s", consent.Version, consent.Digest), Version: c.Version, OccurredAt: s.now()}); err != nil {
-			return err
-		}
-		result = *consent
-		return nil
-	})
+	writeCtx := context.WithoutCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- s.store.WithTx(writeCtx, func(tx *storage.Tx) error {
+			c, err := tx.GetCase(writeCtx, caseID)
+			if err != nil {
+				return err
+			}
+			if err = requireVersion(c.Version, cmd.ExpectedVersion); err != nil {
+				return err
+			}
+			if c.Status != domain.StatusDraft {
+				return domain.NewRuleError(domain.CodeInvalidState, "status", "只有草稿案卷可冻结同意范围")
+			}
+			consent, err := domain.NewConsent(newID("consent"), caseID, c.Version, cmd.AllowedAudiences, cmd.AllowedPurposes, cmd.EmbargoUntil, cmd.WithdrawalTerms, cmd.ConfirmedBy, s.now())
+			if err != nil {
+				return err
+			}
+			expected := c.Version
+			if err = c.Transition(domain.StatusConsentLocked, s.now()); err != nil {
+				return err
+			}
+			if err = tx.InsertConsent(writeCtx, *consent); err != nil {
+				return err
+			}
+			if err = tx.UpdateCase(writeCtx, c, expected); err != nil {
+				return err
+			}
+			if err = tx.AppendAudit(writeCtx, domain.AuditEvent{CaseID: caseID, Action: "CONSENT_LOCKED", Actor: p.Name, Detail: fmt.Sprintf("冻结同意版本 %d，摘要 %s", consent.Version, consent.Digest), Version: c.Version, OccurredAt: s.now()}); err != nil {
+				return err
+			}
+			result = *consent
+			return nil
+		})
+	}()
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		_ = <-done
+		return domain.ConsentScope{}, cancelErr
+	}
+	select {
+	case err = <-done:
+	case <-ctx.Done():
+		_ = <-done
+		return domain.ConsentScope{}, ctx.Err()
+	}
 	return result, mapStorage(err)
 }
 func (s *Service) GetConsent(ctx context.Context, caseID string) (*domain.ConsentScope, error) {
